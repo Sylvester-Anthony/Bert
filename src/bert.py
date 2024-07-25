@@ -45,42 +45,42 @@ for con in conv:
         qa_pairs.append(' '.join(second.split()[:MAX_LEN]))
         pairs.append(qa_pairs)
 
-os.mkdir('./data')
-text_data = []
-file_count = 0
+# os.mkdir('./data')
+# text_data = []
+# file_count = 0
 
-for sample in tqdm.tqdm([x[0] for x in pairs]):
-    text_data.append(sample)
-    if len(text_data) == 10000:
-        with open(f'./data/text_{file_count}.txt', 'w', encoding='utf-8') as fp:
-            fp.write('\n'.join(text_data))
-        text_data = []
-        file_count += 1
+# for sample in tqdm.tqdm([x[0] for x in pairs]):
+#     text_data.append(sample)
+#     if len(text_data) == 10000:
+#         with open(f'./data/text_{file_count}.txt', 'w', encoding='utf-8') as fp:
+#             fp.write('\n'.join(text_data))
+#         text_data = []
+#         file_count += 1
         
-paths = [str(x) for x in Path('./data').glob('**/*.txt')]
+# paths = [str(x) for x in Path('./data').glob('**/*.txt')]
 
-tokenizer = BertWordPieceTokenizer(
-     clean_text = True,
-     handle_chinese_chars = False,
-     strip_accents = False,
-     lowercase = True
-    )
+# tokenizer = BertWordPieceTokenizer(
+#      clean_text = True,
+#      handle_chinese_chars = False,
+#      strip_accents = False,
+#      lowercase = True
+#     )
 
-tokenizer.train(
-    files = paths,
-    vocab_size = 30_000,
-    min_frequency = 5,
-    limit_alphabet = 1000,
-    wordpieces_prefix = '##',
-    special_tokens = ['[PAD]', '[CLS]', '[SEP]', '[MASK]', '[UNK]']
-)
+# tokenizer.train(
+#     files = paths,
+#     vocab_size = 30_000,
+#     min_frequency = 5,
+#     limit_alphabet = 1000,
+#     wordpieces_prefix = '##',
+#     special_tokens = ['[PAD]', '[CLS]', '[SEP]', '[MASK]', '[UNK]']
+# )
 
-os.mkdir('./bert-it-1')
-tokenizer.save_model('./bert-it-1','bert-it')
+# os.mkdir('./bert-it-1')
+# tokenizer.save_model('./bert-it-1','bert-it')
 tokenizer = BertTokenizer.from_pretrained('./bert-it-1/bert-it-vocab.txt', local_files_only=True)   
 
 
-class BERT(Dataset):
+class BERTDataset(Dataset):
     def __init__(self, data_pair, tokenizer, seq_len=64):
         self.tokenizer = tokenizer
         self.seq_len = seq_len
@@ -97,15 +97,16 @@ class BERT(Dataset):
         t1_random, t1_label = self.random_word(t1)
         t2_random, t2_label = self.random_word(t2)
          
-        t1 = [self.tokenizer.vocab['CLS']] + t1_random + [self.tokenizer.vocab['SEP']]
-        t2 = t2.random + [self.tokenizer.vocab['SEP']]
-        t1_label = [self.tokenizer.vocab['PAD']] + t1_label + [self.tokenizer.vocab['PAD']]
+        t1 = [self.tokenizer.vocab['[CLS]']] + t1_random + [self.tokenizer.vocab['[SEP]']]
+        t2 = t2_random + [self.tokenizer.vocab['[SEP]']]
+        t1_label = [self.tokenizer.vocab['[PAD]']] + t1_label + [self.tokenizer.vocab['[PAD]']]
         t2_label = t2_label + [self.tokenizer.vocab['[PAD]']]
         
         segment_label = ([1 for _ in range(len(t1))] + [2 for _ in range(len(t2))])[:self.seq_len]
         bert_input = (t1 + t2) [:self.seq_len] 
         bert_label = (t1_label + t2_label)[:self.seq_len]
         padding = [self.tokenizer.vocab['[PAD]'] for _ in range(self.seq_len - len(bert_input))]
+        bert_input.extend(padding),bert_label.extend(padding), segment_label.extend(padding)
         
         output = {"bert_input": bert_input,
                   "bert_label": bert_label,
@@ -123,7 +124,7 @@ class BERT(Dataset):
         for i, token in enumerate(tokens):
             prob = random.random()
             
-            token_id = self.tokenizer(token)['inputs_ids'][1:-1]
+            token_id = self.tokenizer(token)['input_ids'][1:-1]
             
             if prob < 0.15:
                 prob /= 0.15
@@ -165,6 +166,20 @@ class BERT(Dataset):
     
     def get_random_line(self):
         return self.lines[random.randrange(len(self.lines))][1]
+    
+train_data = BERTDataset(
+    pairs, seq_len = MAX_LEN, tokenizer = tokenizer
+    )
+
+train_loader = DataLoader(
+    train_data, batch_size = 32, shuffle = True, pin_memory = True
+     
+)
+
+sample_data = next(iter(train_loader))
+
+print(train_data[random.randrange(len(train_data))])
+
                                
         
         
