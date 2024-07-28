@@ -182,5 +182,33 @@ print(train_data[random.randrange(len(train_data))])
 
                                
         
+class PositionalEmbedding(torch.nn.Module):
+    
+    def __init__(self, d_model, max_len = 128):
+        super().__init__()
         
+        pe = torch.zeros(max_len, d_model).float()
+        pe.require_grad = False
+        
+        for pos in range(max_len):
+            for i in range(0, d_model, 2):
+                pe[pos, i] = math.sin(pos / (10000 ** ((2 * i) / d_model)))
+                pe[pos, i + 1] = math.cos(pos / (10000 ** ((2 * (i + 1)) / d_model)))
 
+        self.pe = pe.unsqueeze(0)
+    
+    def forward(self, x):
+        return self.pe
+    
+class BERTEmbedding(torch.nn.Module):
+    def __init__(self, vocab_size, embed_size, seq_length = 64, dropout = 0.1):
+        super().__init__()
+        self.embed_size = embed_size
+        self.token = torch.nn.Embedding(vocab_size, embed_size, padding_idx = 0)
+        self.segment = torch.nn.Embedding(3, embed_size, padding_idx = 0)
+        self.position = PositionalEmbedding(d_model= embed_size, max_len = seq_length)
+        self.dropout = torch.nn.Dropout(p = dropout)
+        
+    def forward(self, sequence, segment_label):
+        x = self.token(sequence) + self.position(sequence) + self.segment(segment_label)
+        return self.dropout(x)
