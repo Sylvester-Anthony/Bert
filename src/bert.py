@@ -212,3 +212,8 @@ class BERTEmbedding(torch.nn.Module):
     def forward(self, sequence, segment_label):
         x = self.token(sequence) + self.position(sequence) + self.segment(segment_label)
         return self.dropout(x)
+    
+class MultiHeadedAttention(torch.nn.Module):
+    
+    
+    
