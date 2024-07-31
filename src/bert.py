@@ -214,6 +214,66 @@ class BERTEmbedding(torch.nn.Module):
         return self.dropout(x)
     
 class MultiHeadedAttention(torch.nn.Module):
+    def __init__(self, heads, d_model, dropout = 0.1):
+        super(MultiHeadedAttention, self).__init__()
+        
+        assert d_model % heads == 0
+        self.d_k = d_model // heads
+        self.heads = heads
+        self.dropout = torch.nn.Dropout(dropout)
+        
+        
+        self.query = torch.nn.Linear(d_model, d_model)
+        self.key = torch.nn.Linear(d_model, d_model)
+        self.value = torch.nn.Linear(d_model, d_model)
+        self.output_linear = torch.nn.Linear(d_model, d_model)
+        
+    def forward(self, query, key, value, mask):
+        query = self.query(query)
+        key = self.key(key)
+        value = self.value(value)
+        
+        query = query.view(query.shape[0], -1, self.heads, self.d_k).permute(0,2,1,3)
+        key = key.view(key.shape[0], -1, self.heads. self.d_k).permute(0,2,1,3)
+        value = value.view(value.shape[0], -1, self.heads, self.d_k).permute(0,2,1,3)
+        
+        scores = torch.matmul(query, key.permute(0,1,3,2)) / math.sqrt(query.size(-1))
+        
+        scores = scores.masked_fill(mask == 0, -1e9)
+        
+        weights = F.softmax(scores, dim = -1)
+        weights = self.dropout(weights)
+        
+        context = torch.matmul(weights, value)
+        
+        return self.output_linear(context)
     
+class FeedForward(torch.nn.Module):
+    def __init__(self, d_model, middle_dim = 2048, dropout = 0.1):
+        super(FeedForward, self).__init__()
+        
+        self.fc1 = torch.nn.Linear(d_model, middle_dim)
+        self.fc2 = torch.nn.Linear(middle_dim, d_model)
+        self.dropout = torch.nn.Dropout(dropout)
+        self.activation = torch.nn.GELU()
+        
+    def forward(self, x):
+        out = self.activation(self.fc1(x))
+        out = self.fc2(self.dropout(out))
+        return out 
     
-    
+class EncoderLayer(torch.nn.Module):
+    def __init__(self, d_model = 768, heads = 12, feed_forward_hidden = 768 * 4, dropout = 0.1):
+        super(EncoderLayer, self).__init__()
+        self.layernorm = torch.nn.LayerNorm(d_model)
+        self.self_multihead = MultiHeadedAttention(heads, d_model)
+        self.feed_forward = FeedForward(d_model, middle_dim = feed_forward_hidden)
+        self.dropout = torch.nn.Dropout(dropout)
+        
+        
+    def forward(self, embeddings, mask):
+        interacted = self.dropout(self.self_multihead(embeddings, embeddings, embeddings, mask))
+        interacted = self.layernorm(interacted + embeddings)
+        feed_forward_out = self.dropout(self.feed_forward(interacted))
+        encoded = self.layernorm(feed_forward_out + interacted)
+        return encoded
